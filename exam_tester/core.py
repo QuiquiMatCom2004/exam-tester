@@ -31,6 +31,8 @@ from datetime import datetime
 
 from .exercise import Exercise
 from .exceptions import ConfigurationError, ValidationError
+from .evaluator import StudentEvaluator
+from .reporter import ReportGenerator
 
 
 class ExamTester:
@@ -332,8 +334,6 @@ class ExamTester:
         """
         self._validate_for_evaluation()
 
-        # TODO: Implementar evaluación completa
-        # Por ahora, un placeholder
         print("\n" + "=" * 70)
         print(f"Evaluando estudiantes en: {self._students_path}")
         print("=" * 70)
@@ -344,12 +344,55 @@ class ExamTester:
             if folder.is_dir()
         ]
 
+        if not student_folders:
+            print("\n⚠ No se encontraron carpetas de estudiantes")
+            self._results = []
+            return self
+
+        student_folders.sort(key=lambda f: f.name)
         print(f"\nEncontrados {len(student_folders)} estudiantes")
 
-        # TODO: Implementar lógica de evaluación real
-        # Esto se implementará en evaluator.py
+        # Crear evaluador
+        evaluator = StudentEvaluator(self._exercises, self._test_cases)
+
+        # Evaluar cada estudiante
+        self._results = []
+        for i, folder in enumerate(student_folders, 1):
+            student_name = folder.name
+            print(f"\n[{i}/{len(student_folders)}] Evaluando: {student_name}")
+
+            try:
+                resultado = evaluator.evaluate_student(student_name, folder)
+                self._results.append(resultado)
+
+                # Mostrar resumen rápido
+                if 'error' in resultado:
+                    print(f"  ✗ Error: {resultado['error']}")
+                else:
+                    total_pasados = sum(
+                        ej.get('casos_pasados', 0)
+                        for ej in resultado.get('ejercicios', [])
+                        if 'error' not in ej
+                    )
+                    total_casos = sum(
+                        ej.get('total_casos', 0)
+                        for ej in resultado.get('ejercicios', [])
+                        if 'error' not in ej
+                    )
+                    print(f"  ✓ Casos pasados: {total_pasados}/{total_casos}")
+
+            except Exception as e:
+                print(f"  ✗ Error inesperado: {e}")
+                self._results.append({
+                    'nombre_estudiante': student_name,
+                    'error': f'Error inesperado durante evaluación: {str(e)}'
+                })
 
         self._configured['students_evaluated'] = True
+
+        print("\n" + "=" * 70)
+        print(f"✓ Evaluación completada: {len(self._results)} estudiantes")
+        print("=" * 70)
 
         return self
 
@@ -368,7 +411,8 @@ class ExamTester:
             self (para builder pattern)
 
         Raises:
-            ConfigurationError: Si no se han evaluado estudiantes
+            ConfigurationError: Si no se han evaluado estudiantes o
+                               si no se ha configurado results_path
 
         Example:
             >>> tester.generate_reports(formats=['json', 'markdown'])
@@ -379,10 +423,41 @@ class ExamTester:
                 "Ejecuta evaluate_all() primero"
             )
 
-        # TODO: Implementar generación de reportes
-        # Esto se implementará en reporter.py
+        if self._results_path is None:
+            raise ConfigurationError(
+                "Debes configurar results_path antes de generar reportes"
+            )
 
-        print("\n✓ Reportes generados")
+        print("\n" + "=" * 70)
+        print("Generando reportes...")
+        print("=" * 70)
+
+        # Crear generador de reportes
+        reporter = ReportGenerator(
+            self.exam_name,
+            self._exercises,
+            self._results
+        )
+
+        # Timestamp para nombres de archivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Generar reportes según formatos solicitados
+        for formato in formats:
+            if formato.lower() == 'json':
+                filepath = self._results_path / f"resultados_{timestamp}.json"
+                reporter.generate_json(filepath)
+                print(f"✓ JSON:     {filepath}")
+
+            elif formato.lower() == 'markdown':
+                filepath = self._results_path / f"reporte_{timestamp}.md"
+                reporter.generate_markdown(filepath)
+                print(f"✓ Markdown: {filepath}")
+
+            else:
+                print(f"⚠ Formato desconocido: {formato}")
+
+        print("=" * 70)
 
         return self
 
