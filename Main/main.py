@@ -53,7 +53,8 @@ class EvaluadorEstudiantes:
                 shutil.copy2(origen, carpeta_estudiante / archivo)
 
             # Archivos del examen (ExamContent/)
-            archivos_exam = ['correctSolution.py', 'test_cases.json']
+            # Solo test_cases.json que contiene inputs y expected_outputs pre-generados
+            archivos_exam = ['test_cases.json']
             for archivo in archivos_exam:
                 origen = self.ruta_exam_content / archivo
                 if not origen.exists():
@@ -125,7 +126,7 @@ class EvaluadorEstudiantes:
         """
         try:
             archivos_limpiar = [
-                'tester.py', 'correctSolution.py', 'case_loader.py',
+                'tester.py', 'case_loader.py',
                 'test_cases.json', 'config.py', 'comparators.py'
             ]
 

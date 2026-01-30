@@ -48,15 +48,14 @@ def ejecutar_con_timeout(func, args, timeout=5):
         return None, f"{type(e).__name__}: {str(e)}"
 
 
-def probar_funcion(funcion_estudiante, funcion_correcta, casos_prueba,
+def probar_funcion(funcion_estudiante, casos_prueba,
                    nombre_funcion, num_casos_fijados=0, comparator_func=None):
     """
-    Prueba una funcion del estudiante contra la solucion correcta.
+    Prueba una funcion del estudiante contra respuestas pre-generadas.
 
     Args:
         funcion_estudiante: funcion del estudiante a probar
-        funcion_correcta: funcion correcta de referencia
-        casos_prueba: lista de casos de prueba
+        casos_prueba: lista de casos con inputs y expected_output pre-generados
         nombre_funcion: nombre de la funcion
         num_casos_fijados: numero de casos fijados al inicio de la lista
         comparator_func: funcion de comparacion (esperado, obtenido) -> bool
@@ -78,21 +77,41 @@ def probar_funcion(funcion_estudiante, funcion_correcta, casos_prueba,
     }
 
     for i, caso in enumerate(casos_prueba, 1):
-        resultado_esperado, error_esperado = ejecutar_con_timeout(
-            funcion_correcta, caso
-        )
+        # Obtener inputs y output esperado pre-generado
+        inputs = tuple(caso['inputs'])
+        resultado_esperado = caso['expected_output']
+        error_esperado = caso.get('expected_error')
 
+        # Ejecutar funcion del estudiante
         resultado_estudiante, error_estudiante = ejecutar_con_timeout(
-            funcion_estudiante, caso
+            funcion_estudiante, inputs
         )
 
         es_caso_fijado = (i <= num_casos_fijados)
 
-        if error_estudiante:
+        # Si la solucion correcta genera error, el estudiante tambien debe generarlo
+        if error_esperado:
+            if error_estudiante:
+                # Ambos generan error, consideramos correcto
+                resultados['casos_pasados'] += 1
+                if es_caso_fijado:
+                    resultados['casos_fijados_pasados'] += 1
+            else:
+                # El estudiante no genero error cuando deberia
+                resultados['casos_fallidos'] += 1
+                resultados['detalles_fallos'].append({
+                    'caso_numero': i,
+                    'entrada': list(inputs),
+                    'esperado': f"ERROR: {error_esperado}",
+                    'obtenido': resultado_estudiante if resultado_estudiante is not None else 'None',
+                    'tipo_error': 'deberia_generar_error'
+                })
+        elif error_estudiante:
+            # El estudiante genero error cuando no deberia
             resultados['casos_error'] += 1
             resultados['detalles_fallos'].append({
                 'caso_numero': i,
-                'entrada': [list(arg) if isinstance(arg, list) else arg for arg in caso],
+                'entrada': list(inputs),
                 'esperado': resultado_esperado if resultado_esperado is not None else 'None',
                 'obtenido': f"ERROR: {error_estudiante}",
                 'tipo_error': 'excepcion'
@@ -101,7 +120,7 @@ def probar_funcion(funcion_estudiante, funcion_correcta, casos_prueba,
             resultados['casos_fallidos'] += 1
             resultados['detalles_fallos'].append({
                 'caso_numero': i,
-                'entrada': [list(arg) if isinstance(arg, list) else arg for arg in caso],
+                'entrada': list(inputs),
                 'esperado': resultado_esperado if resultado_esperado is not None else 'None',
                 'obtenido': resultado_estudiante if resultado_estudiante is not None else 'None',
                 'tipo_error': 'resultado_incorrecto'
@@ -119,7 +138,7 @@ def evaluar_estudiante(nombre_estudiante, ruta_carpeta, exercises_config):
     Evalua todos los ejercicios de un estudiante.
 
     Args:
-        nombre_estudiante: nombre del estudiante
+        nombre_estudiante: nombre del estudiante (puede contener espacios, ej: "Adriana Amador")
         ruta_carpeta: ruta a la carpeta del estudiante
         exercises_config: lista de configuraciones de ejercicios
     Returns:
@@ -128,7 +147,6 @@ def evaluar_estudiante(nombre_estudiante, ruta_carpeta, exercises_config):
     sys.path.insert(0, str(Path(__file__).parent))
 
     try:
-        import correctSolution
         import case_loader
         from comparators import get_comparator
     except ImportError as e:
@@ -137,12 +155,17 @@ def evaluar_estudiante(nombre_estudiante, ruta_carpeta, exercises_config):
             'nombre_estudiante': nombre_estudiante
         }
 
+    # Cargar casos con respuestas pre-generadas
     casos = case_loader.generar_todos_los_casos()
 
     resultados = {
         'nombre_estudiante': nombre_estudiante,
         'ejercicios': []
     }
+
+    # Convertir nombre con espacios a nombre con guiones bajos para archivos
+    # Ejemplo: "Adriana Amador" -> "Adriana_Amador"
+    nombre_archivo = nombre_estudiante.replace(' ', '_')
 
     for ex in exercises_config:
         ex_name = ex['name']
@@ -151,21 +174,14 @@ def evaluar_estudiante(nombre_estudiante, ruta_carpeta, exercises_config):
         num_fixed = ex['num_fixed_cases']
         comp_func = get_comparator(ex['comparator'])
 
-        archivo = Path(ruta_carpeta) / f"{nombre_estudiante}_{suffix}.py"
-
-        if not hasattr(correctSolution, func_name):
-            resultados['ejercicios'].append({
-                'nombre_funcion': func_name,
-                'error': f'Solucion correcta no tiene la funcion {func_name}'
-            })
-            continue
+        # Buscar archivo usando nombre con guiones bajos
+        archivo = Path(ruta_carpeta) / f"{nombre_archivo}_{suffix}.py"
 
         if archivo.exists():
             modulo = cargar_modulo(archivo)
             if modulo and hasattr(modulo, func_name):
                 resultado = probar_funcion(
                     getattr(modulo, func_name),
-                    getattr(correctSolution, func_name),
                     casos.get(ex_name, []),
                     func_name,
                     num_casos_fijados=num_fixed,
