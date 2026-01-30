@@ -56,19 +56,18 @@ from .exceptions import (
     EvaluationError,
     GeneratorError
 )
-
-# La clase ExamTester se importará después de crearla
-# from .core import ExamTester
+from .core import ExamTester
+from .comparators import register_comparator, COMPARATORS
 
 # Versión del paquete
 __version__ = "2.0.0"
 
 # Definir qué se exporta con "from exam_tester import *"
 __all__ = [
-    # Clases base
+    # Clases principales
+    'ExamTester',
     'Exercise',
     'TestCaseGenerator',
-    # 'ExamTester',  # Se agregará después
 
     # Generadores predefinidos
     'IntegerPairGenerator',
@@ -83,6 +82,10 @@ __all__ = [
     'ValidationError',
     'EvaluationError',
     'GeneratorError',
+
+    # Comparadores
+    'register_comparator',
+    'COMPARATORS',
 
     # Versión
     '__version__',

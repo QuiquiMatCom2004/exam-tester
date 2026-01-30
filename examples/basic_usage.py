@@ -133,63 +133,51 @@ class FactorialExercise(Exercise):
 def main():
     """
     Función principal que configura y ejecuta el tester.
-
-    NOTA: Esta función está comentada porque necesita que la clase
-    ExamTester esté implementada. Una vez implementada, descomenta
-    el código para probar el ejemplo.
     """
 
     print("=" * 60)
     print("Ejemplo Básico - ExamTester v2.0")
     print("=" * 60)
 
-    # TODO: Descomentar cuando ExamTester esté implementado
-    """
-    from exam_tester import ExamTester
+    # Crear instancias de ejercicios
+    suma = SumaExercise()
+    factorial = FactorialExercise()
 
-    # Crear tester con builder pattern
-    tester = (ExamTester("Primer Parcial")
-        # Agregar ejercicios
-        .add_exercise(SumaExercise())
-        .add_exercise(FactorialExercise())
-
-        # Configurar rutas
-        .set_students_path("./StudentsCode")
-        .set_results_path("./Results")
-
-        # Generar casos de prueba (100 casos aleatorios por ejercicio)
-        # Usando semilla 42 para reproducibilidad
-        .generate_test_cases(num_random=100, seed=42)
-
-        # Evaluar todos los estudiantes
-        .evaluate_all()
-
-        # Generar reportes en JSON y Markdown
-        .generate_reports(formats=['json', 'markdown'])
-    )
-
-    print("\n✓ Evaluación completada")
-    print("✓ Reportes generados en ./Results")
-    """
-
-    # Por ahora, solo mostramos los ejercicios creados
+    # Mostrar información de ejercicios
     print("\nEjercicios definidos:")
     print()
-
-    suma = SumaExercise()
     print(f"1. {suma}")
     print(f"   Generador: {suma.get_test_generator().__class__.__name__}")
     print(f"   Casos fijos: {suma.get_test_generator().get_num_fixed_cases()}")
     print()
-
-    factorial = FactorialExercise()
     print(f"2. {factorial}")
     print(f"   Generador: {factorial.get_test_generator().__class__.__name__}")
     print(f"   Casos fijos: {factorial.get_test_generator().get_num_fixed_cases()}")
-    print()
 
+    # Demostrar uso del tester (sin evaluar, solo generar casos)
+    print("\n" + "=" * 60)
+    print("Demostración de generación de casos")
     print("=" * 60)
-    print("Estructura de carpetas esperada:")
+
+    from exam_tester import ExamTester
+
+    # Crear tester con builder pattern
+    tester = (ExamTester("Primer Parcial Demo")
+        .add_exercise(suma)
+        .add_exercise(factorial)
+        .set_results_path("./Results")
+        .generate_test_cases(num_random=10, seed=42)  # Solo 10 para demo
+    )
+
+    print(f"\n✓ Tester configurado: {tester}")
+    print(f"  Ejercicios: {tester.num_exercises}")
+
+    # Guardar casos generados
+    tester.save_test_cases("./Results/demo_test_cases.json")
+
+    # Mostrar estructura esperada
+    print("\n" + "=" * 60)
+    print("Estructura de carpetas esperada para evaluación completa:")
     print("=" * 60)
     print("""
 StudentsCode/
@@ -202,6 +190,17 @@ StudentsCode/
 └── Adriana Amador/
     ├── Adriana_Amador_1.py
     └── Adriana_Amador_2.py
+
+Para evaluación completa, usa:
+    tester = (ExamTester("Mi Examen")
+        .add_exercise(SumaExercise())
+        .add_exercise(FactorialExercise())
+        .set_students_path("./StudentsCode")
+        .set_results_path("./Results")
+        .generate_test_cases(num_random=100, seed=42)
+        .evaluate_all()
+        .generate_reports(formats=['json', 'markdown'])
+    )
     """)
 
 
