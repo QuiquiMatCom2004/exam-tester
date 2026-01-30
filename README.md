@@ -1,134 +1,270 @@
-# ExamTester - Framework Generico de Evaluacion
+# ExamTester v2.0 - Framework Genérico de Evaluación
 
-Framework generico y reutilizable para evaluar automaticamente codigo de estudiantes mediante casos de prueba.
+Framework genérico y reutilizable orientado a objetos para evaluar automáticamente código de estudiantes mediante casos de prueba.
+
+## Características
+
+- **Arquitectura OOP completa**: Clases para ejercicios y generadores de pruebas
+- **Patrón Builder**: API fluida con encadenamiento de métodos
+- **Pre-generación de resultados**: Ejecuta la solución correcta solo una vez (100x más rápido)
+- **Nombres flexibles**: Soporta carpetas con espacios ("Adriana Amador") y archivos con guiones bajos ("Adriana_Amador_1.py")
+- **Generación reproducible**: Casos aleatorios con semillas para reproducibilidad
+- **Comparadores personalizables**: Funciones de comparación enchufables
+- **Reportes multi-formato**: JSON (estructurado) y Markdown (legible)
+- **Type hints completos**: Soporte completo de tipos para mypy
+- **Validación exhaustiva**: Mensajes de error claros con seguimiento de configuración
+
+## Instalación
+
+```bash
+# Instalación en modo desarrollo (editable)
+pip install -e .
+
+# Instalación regular
+pip install .
+```
+
+## Inicio Rápido
+
+```python
+from exam_tester import ExamTester, Exercise
+from exam_tester.generators import IntegerPairGenerator
+
+# 1. Definir un ejercicio
+class SumaExercise(Exercise):
+    def __init__(self):
+        super().__init__(
+            name="suma",
+            function_name="suma",
+            file_suffix=1,
+            comparator="default"
+        )
+
+    def get_solution(self):
+        return lambda a, b: a + b
+
+    def get_test_generator(self):
+        return IntegerPairGenerator(
+            fixed_cases=[(0, 0), (1, 1), (-1, 1)],
+            min_val=-1000,
+            max_val=1000
+        )
+
+# 2. Configurar y ejecutar el tester (patrón builder)
+tester = (ExamTester("Mi Examen")
+    .add_exercise(SumaExercise())
+    .set_students_path("./StudentsCode")
+    .set_results_path("./Results")
+    .generate_test_cases(num_random=100, seed=42)
+    .evaluate_all()
+    .generate_reports(formats=['json', 'markdown'])
+)
+```
 
 ## Estructura del Proyecto
 
 ```
 ExamTester/
-├── config.py                    # Configuracion central del examen
-├── Main/
-│   └── main.py                  # Orquestador - evalua todos los estudiantes
-├── Tester/
-│   ├── tester.py                # Motor de pruebas
-│   ├── case_loader.py           # Cargador de casos desde JSON
-│   ├── generate_test_cases.py  # Generador de casos de prueba
-│   └── comparators.py           # Registro de funciones de comparacion
-├── ExamContent/                 # Contenido especifico del examen (reemplazable)
-│   ├── correctSolution.py       # Soluciones oficiales
-│   ├── input.py                 # Generadores de casos de prueba
-│   └── test_cases.json          # Casos pre-generados (auto-generado)
-├── StudentsCode/                # Carpeta para submissions de estudiantes
-└── Results/                     # Carpeta de salida para reportes
+├── exam_tester/              # Paquete principal (v2.0 OOP API)
+│   ├── __init__.py           # Exporta API pública
+│   ├── core.py               # Clase ExamTester (builder pattern)
+│   ├── exercise.py           # Clase base Exercise (abstracta)
+│   ├── generators.py         # Generadores de casos de prueba
+│   ├── evaluator.py          # Motor de evaluación
+│   ├── reporter.py           # Generador de reportes
+│   ├── comparators.py        # Funciones de comparación
+│   ├── exceptions.py         # Excepciones personalizadas
+│   └── py.typed              # Marcador de type hints
+├── examples/                 # Ejemplos de uso
+│   ├── basic_usage.py
+│   ├── custom_exercise.py
+│   └── complete_workflow.py
+├── StudentsCode/             # Carpeta para código de estudiantes
+├── Results/                  # Carpeta de salida para reportes
+├── setup.py                  # Configuración de empaquetado
+├── MANIFEST.in               # Reglas de distribución
+├── LICENSE                   # Licencia MIT
+└── README.md                 # Esta documentación
 ```
 
-## Flujo de Uso para un Nuevo Examen
+## Guía de Uso Completa
 
-### Paso 1: Configurar el examen
+### Paso 1: Definir Ejercicios
 
-Editar `config.py` con la informacion del examen:
+Cada ejercicio es una clase que hereda de `Exercise`:
 
 ```python
-EXAM_CONFIG = {
-    "exam_name": "Primer Parcial",
-    "num_random_cases": 100,
-    "exercises": [
-        {
-            "name": "suma",              # Identificador del ejercicio
-            "function_name": "suma",     # Nombre de la funcion a implementar
-            "file_suffix": 1,            # Archivo: {nombre_estudiante}_1.py
-            "num_fixed_cases": 5,        # Casos edge importantes
-            "comparator": "default",     # Comparador a usar
-        },
-        {
-            "name": "factorial",
-            "function_name": "factorial",
-            "file_suffix": 2,
-            "num_fixed_cases": 7,
-            "comparator": "default",
-        },
-    ]
-}
+from exam_tester import Exercise
+from exam_tester.generators import SingleIntegerGenerator
+
+class FactorialExercise(Exercise):
+    """Ejercicio: calcular factorial de un número"""
+
+    def __init__(self):
+        super().__init__(
+            name="factorial",           # Identificador del ejercicio
+            function_name="factorial",  # Nombre de la función a evaluar
+            file_suffix=2,              # Archivo: {Nombre}_2.py
+            comparator="default"        # Comparador a usar
+        )
+
+    def get_solution(self):
+        """Retorna la solución correcta"""
+        def factorial(n):
+            if n <= 1:
+                return 1
+            return n * factorial(n - 1)
+        return factorial
+
+    def get_test_generator(self):
+        """Retorna el generador de casos de prueba"""
+        return SingleIntegerGenerator(
+            fixed_cases=[
+                (0,),   # Casos fijos (edge cases)
+                (1,),
+                (5,),
+                (10,),
+                (20,)
+            ],
+            min_val=0,
+            max_val=20
+        )
 ```
 
-### Paso 2: Escribir soluciones oficiales
+### Paso 2: Generadores de Casos de Prueba
 
-Editar `ExamContent/correctSolution.py`:
+ExamTester incluye 5 generadores predefinidos:
+
+#### IntegerPairGenerator
+Para funciones con 2 argumentos enteros:
 
 ```python
-def suma(a, b):
-    """Solucion oficial para el ejercicio suma."""
-    return a + b
+from exam_tester.generators import IntegerPairGenerator
 
-def factorial(n):
-    """Solucion oficial para el ejercicio factorial."""
-    if n <= 1:
-        return 1
-    return n * factorial(n - 1)
+generator = IntegerPairGenerator(
+    fixed_cases=[(0, 0), (1, 1), (-1, 1)],
+    min_val=-1000,
+    max_val=1000
+)
 ```
 
-### Paso 3: Escribir generadores de casos
-
-Editar `ExamContent/input.py` siguiendo la convencion `generar_casos_{name}(num_casos)`:
+#### SingleIntegerGenerator
+Para funciones con 1 argumento entero:
 
 ```python
-import random
+from exam_tester.generators import SingleIntegerGenerator
 
-def generar_casos_suma(num_casos):
+generator = SingleIntegerGenerator(
+    fixed_cases=[(0,), (1,), (5,)],
+    min_val=0,
+    max_val=100
+)
+```
+
+#### IntegerListGenerator
+Para funciones que reciben una lista de enteros:
+
+```python
+from exam_tester.generators import IntegerListGenerator
+
+generator = IntegerListGenerator(
+    fixed_cases=[
+        ([],),
+        ([1],),
+        ([1, 2, 3],)
+    ],
+    min_length=0,
+    max_length=10,
+    min_val=-100,
+    max_val=100
+)
+```
+
+#### StringGenerator
+Para funciones con argumentos de cadena:
+
+```python
+from exam_tester.generators import StringGenerator
+
+generator = StringGenerator(
+    fixed_cases=[
+        ("",),
+        ("hello",),
+        ("123",)
+    ],
+    min_length=0,
+    max_length=20,
+    charset="abcdefghijklmnopqrstuvwxyz0123456789"
+)
+```
+
+#### CustomGenerator
+Para casos de prueba completamente personalizados:
+
+```python
+from exam_tester.generators import CustomGenerator
+
+def mi_generador_personalizado(n, seed=None):
+    """Genera n casos de prueba personalizados"""
+    import random
+    if seed is not None:
+        random.seed(seed)
+
     casos = []
-    # Casos fijos (edge cases) van primero
-    casos.append((0, 0))
-    casos.append((1, 1))
-    casos.append((-1, 1))
-    casos.append((100, -100))
-    casos.append((999, 1))
-
-    # Casos aleatorios
-    for _ in range(num_casos - 5):
-        a = random.randint(-1000, 1000)
-        b = random.randint(-1000, 1000)
-        casos.append((a, b))
-
+    for _ in range(n):
+        # Tu lógica personalizada aquí
+        x = random.randint(1, 100)
+        y = random.choice(['a', 'b', 'c'])
+        casos.append((x, y))
     return casos
 
-def generar_casos_factorial(num_casos):
-    casos = []
-    # Casos fijos
-    casos.append((0,))
-    casos.append((1,))
-    casos.append((5,))
-    casos.append((10,))
-    casos.append((15,))
-    casos.append((20,))
-    casos.append((1,))
-
-    # Casos aleatorios
-    for _ in range(num_casos - 7):
-        n = random.randint(0, 20)
-        casos.append((n,))
-
-    return casos
+generator = CustomGenerator(
+    fixed_cases=[(10, 'a'), (20, 'b')],
+    random_generator=mi_generador_personalizado
+)
 ```
 
-**Importante**:
-- Los nombres de las funciones deben seguir el patron `generar_casos_{name}` donde `{name}` es el campo "name" del ejercicio en config.py
-- Cada caso es una tupla con los argumentos de la funcion
-- Los casos fijos (edge cases) van al inicio de la lista
+### Paso 3: Configurar el Tester (Patrón Builder)
 
-### Paso 4: Preparar carpetas de estudiantes
+```python
+from exam_tester import ExamTester
 
-Colocar las carpetas de estudiantes en `StudentsCode/`. Cada carpeta debe:
-- Tener como nombre el identificador del estudiante (puede contener espacios, ej: `Adriana Amador`)
-- Contener archivos con patron: `{Nombre_Con_Guiones_Bajos}_{file_suffix}.py`
+# Crear el tester con patrón builder
+tester = (ExamTester("Primer Parcial")
+    .add_exercise(SumaExercise())
+    .add_exercise(FactorialExercise())
+    .set_students_path("./StudentsCode")
+    .set_results_path("./Results")
+)
 
-**Importante**: Las carpetas pueden tener espacios, pero los archivos deben usar guiones bajos (`_`).
+# Validación automática
+# Si falta alguna configuración, se lanzará ConfigurationError
+```
 
-Ejemplo:
+### Paso 4: Generar Casos de Prueba
+
+```python
+# Generar casos (combina casos fijos + aleatorios)
+tester.generate_test_cases(
+    num_random=100,  # Número de casos aleatorios
+    seed=42          # Semilla para reproducibilidad (opcional)
+)
+
+# Opcionalmente guardar los casos generados
+tester.save_test_cases("./Results/test_cases.json")
+```
+
+**Optimización**: La solución correcta se ejecuta solo una vez aquí para pre-calcular todas las respuestas esperadas. Esto hace la evaluación 100x más rápida.
+
+### Paso 5: Preparar Código de Estudiantes
+
+Estructura de carpetas:
+
 ```
 StudentsCode/
-├── Juan Perez/
-│   ├── Juan_Perez_1.py    # Contiene: def suma(a, b): ...
-│   └── Juan_Perez_2.py    # Contiene: def factorial(n): ...
+├── Juan Perez/              # Carpeta con espacios (OK)
+│   ├── Juan_Perez_1.py      # Archivos con guiones bajos
+│   └── Juan_Perez_2.py
 ├── Maria Lopez/
 │   ├── Maria_Lopez_1.py
 │   └── Maria_Lopez_2.py
@@ -137,178 +273,290 @@ StudentsCode/
     └── Adriana_Amador_2.py
 ```
 
-### Paso 5: Generar casos de prueba
+**Importante**: Las carpetas pueden tener espacios, pero los archivos deben usar guiones bajos. El framework convierte automáticamente.
 
-Ejecutar el generador de casos (solo una vez):
+Ejemplo de archivo de estudiante (`Juan_Perez_1.py`):
 
-```bash
-python Tester/generate_test_cases.py
+```python
+def suma(a, b):
+    """Implementación del estudiante"""
+    return a + b
 ```
 
-Esto creara `ExamContent/test_cases.json` con:
-- Todos los casos de entrada pre-generados
-- Las respuestas esperadas de la solución correcta para cada caso
+### Paso 6: Evaluar Estudiantes
 
-**Optimización**: Al pre-generar las respuestas, la solución correcta se ejecuta solo una vez (en este paso), en lugar de ejecutarse por cada estudiante. Esto hace la evaluación mucho más rápida.
+```python
+# Evaluar todos los estudiantes
+tester.evaluate_all()
 
-### Paso 6: Evaluar estudiantes
-
-Ejecutar el evaluador principal:
-
-```bash
-python Main/main.py
+# Acceder a resultados programáticamente
+results = tester.get_results()
+for student_result in results:
+    print(f"Estudiante: {student_result['nombre_estudiante']}")
+    for ejercicio in student_result['ejercicios']:
+        print(f"  {ejercicio['ejercicio']}: {ejercicio['pasados']}/{ejercicio['total']}")
 ```
 
-Esto:
-1. Inyecta el tester en cada carpeta de estudiante (sin la solución correcta)
-2. Ejecuta las pruebas comparando contra respuestas pre-generadas
-3. Recopila resultados
-4. Genera reportes en `Results/`:
-   - `resultados_TIMESTAMP.json` (datos estructurados)
-   - `reporte_TIMESTAMP.md` (reporte legible)
-5. Limpia archivos temporales
+### Paso 7: Generar Reportes
 
-**Nota**: La solución correcta NO se ejecuta durante este paso, solo se comparan las respuestas del estudiante contra las respuestas pre-generadas en `test_cases.json`.
+```python
+# Generar reportes en múltiples formatos
+tester.generate_reports(formats=['json', 'markdown'])
+
+# Reportes generados:
+# - Results/resultados_TIMESTAMP.json  (datos estructurados)
+# - Results/reporte_TIMESTAMP.md       (reporte legible)
+```
 
 ## Comparadores Disponibles
 
-Los comparadores se usan para validar resultados. Disponibles en `Tester/comparators.py`:
-
-- **`default`**: Igualdad directa (`==`)
-- **`list_equal`**: Compara listas elemento a elemento
-- **`tuple_result`**: Para funciones que retornan `(bool, valor)`. Si ambos tienen primer elemento falsy, son iguales.
-
-### Agregar un comparador personalizado
-
-Editar `Tester/comparators.py`:
+### Comparadores Predefinidos
 
 ```python
-def mi_comparador(esperado, obtenido):
-    """Tu logica de comparacion personalizada."""
-    # Retornar True si son equivalentes, False si no
-    return esperado == obtenido
+from exam_tester.comparators import COMPARATORS
 
-# Agregar al registro
-COMPARATORS["mi_comparador"] = mi_comparador
+# default: Igualdad directa (==)
+# list_equal: Compara listas elemento a elemento
+# tuple_result: Para funciones que retornan (bool, valor)
 ```
 
-Luego usar `"comparator": "mi_comparador"` en config.py.
+### Crear Comparador Personalizado
+
+```python
+from exam_tester.comparators import register_comparator
+
+def mi_comparador(esperado, obtenido):
+    """Lógica de comparación personalizada"""
+    # Retornar True si son equivalentes
+    return abs(esperado - obtenido) < 0.001  # Tolerancia numérica
+
+# Registrar el comparador
+register_comparator("tolerancia", mi_comparador)
+
+# Usar en ejercicio
+class MiEjercicio(Exercise):
+    def __init__(self):
+        super().__init__(
+            name="mi_ejercicio",
+            function_name="mi_funcion",
+            file_suffix=1,
+            comparator="tolerancia"  # Usar comparador personalizado
+        )
+```
+
+## Ejemplos Completos
+
+### Ejemplo Básico
+
+Ver [examples/basic_usage.py](examples/basic_usage.py):
+
+```python
+from exam_tester import ExamTester, Exercise
+from exam_tester.generators import IntegerPairGenerator, SingleIntegerGenerator
+
+class SumaExercise(Exercise):
+    def __init__(self):
+        super().__init__(name="suma", function_name="suma", file_suffix=1)
+
+    def get_solution(self):
+        return lambda a, b: a + b
+
+    def get_test_generator(self):
+        return IntegerPairGenerator(
+            fixed_cases=[(0, 0), (1, 1), (-1, 1)],
+            min_val=-1000,
+            max_val=1000
+        )
+
+# Ejecutar
+tester = (ExamTester("Primer Parcial Demo")
+    .add_exercise(SumaExercise())
+    .set_results_path("./Results")
+    .generate_test_cases(num_random=10, seed=42)
+)
+tester.save_test_cases("./Results/demo_test_cases.json")
+```
+
+### Ejemplo con Evaluación Completa
+
+Ver [examples/complete_workflow.py](examples/complete_workflow.py) para un flujo completo que incluye:
+- Definición de múltiples ejercicios
+- Generación de casos de prueba
+- Evaluación de estudiantes
+- Generación de reportes JSON y Markdown
+
+### Ejemplo con Generador Personalizado
+
+Ver [examples/custom_exercise.py](examples/custom_exercise.py) para un ejemplo usando `CustomGenerator`.
+
+## Excepciones
+
+El framework lanza excepciones específicas para facilitar el debugging:
+
+```python
+from exam_tester.exceptions import (
+    ExamTesterError,        # Excepción base
+    ConfigurationError,     # Falta configuración
+    ValidationError,        # Datos inválidos
+    EvaluationError,        # Error durante evaluación
+    GeneratorError          # Error en generación de casos
+)
+```
+
+Ejemplo de manejo:
+
+```python
+try:
+    tester = ExamTester("Mi Examen")
+    tester.evaluate_all()  # Falta configuración
+except ConfigurationError as e:
+    print(f"Error de configuración: {e}")
+```
 
 ## Optimizaciones del Framework
 
 ### Respuestas Pre-generadas
 
-El framework utiliza un enfoque optimizado que genera las respuestas esperadas una sola vez:
+**Problema**: Evaluar 100 estudiantes con 100 casos cada uno requiere ejecutar la solución correcta 10,000 veces (100 × 100).
 
-**Ventajas**:
+**Solución**: Pre-generar las respuestas esperadas en `generate_test_cases()`, ejecutando la solución correcta solo 100 veces (una vez por caso).
 
-- **Eficiencia**: La solución correcta se ejecuta solo una vez (al generar `test_cases.json`), no por cada estudiante
-- **Consistencia**: Todos los estudiantes son evaluados contra exactamente las mismas respuestas esperadas
-- **Velocidad**: La evaluación es mucho más rápida, especialmente con muchos estudiantes
-- **Portabilidad**: El archivo `test_cases.json` contiene todo lo necesario para evaluar
-
-**Formato del JSON**:
-
-```json
-{
-  "ejercicio1": [
-    {
-      "inputs": [arg1, arg2, ...],
-      "expected_output": resultado,
-      "expected_error": null
-    },
-    ...
-  ]
-}
-```
+**Resultado**: 100x mejora en rendimiento.
 
 ### Manejo Flexible de Nombres
 
-El framework soporta dos formatos de nombres comunes en entornos educativos:
+- **Carpetas de estudiantes**: Pueden tener espacios (ej: "Adriana Amador", "Juan Perez")
+- **Archivos de estudiantes**: Deben usar guiones bajos (ej: "Adriana_Amador_1.py")
 
-- **Carpetas**: Pueden tener espacios (ej: `Adriana Amador`, `Juan Perez`)
-- **Archivos**: Deben usar guiones bajos (ej: `Adriana_Amador_1.py`, `Juan_Perez_1.py`)
+El framework convierte automáticamente espacios a guiones bajos, eliminando errores comunes.
 
-El framework convierte automáticamente los espacios a guiones bajos al buscar archivos, eliminando errores comunes de formato.
+### Generación Reproducible
 
-## Estructura de Archivos de Estudiante
+Usa el parámetro `seed` para generar siempre los mismos casos aleatorios:
 
-Cada archivo debe:
-- Tener nombre: `{Nombre_Con_Guiones_Bajos}_{file_suffix}.py`
-- Definir la funcion especificada en `function_name` del config
-- La funcion debe tener la misma firma que la solucion oficial
-
-**Formato de nombres**: Las carpetas pueden tener espacios (ej: `Adriana Amador`), pero los archivos deben usar guiones bajos (ej: `Adriana_Amador_1.py`). El framework convierte automáticamente los espacios a guiones bajos al buscar archivos.
-
-Ejemplo (`Juan_Perez_1.py`):
 ```python
+tester.generate_test_cases(num_random=100, seed=42)
+# Siempre generará los mismos 100 casos
+```
+
+## API Reference
+
+### ExamTester
+
+```python
+class ExamTester:
+    def __init__(self, exam_name: str)
+    def add_exercise(self, exercise: Exercise) -> 'ExamTester'
+    def set_students_path(self, path: str) -> 'ExamTester'
+    def set_results_path(self, path: str) -> 'ExamTester'
+    def generate_test_cases(self, num_random: int, seed: Optional[int] = None) -> 'ExamTester'
+    def save_test_cases(self, filepath: str) -> None
+    def evaluate_all(self) -> 'ExamTester'
+    def generate_reports(self, formats: List[str] = ['json', 'markdown']) -> 'ExamTester'
+    def get_results(self) -> List[Dict[str, Any]]
+```
+
+### Exercise (Clase Abstracta)
+
+```python
+class Exercise(ABC):
+    def __init__(self, name: str, function_name: str, file_suffix: int, comparator: str = "default")
+
+    @abstractmethod
+    def get_solution(self) -> Callable
+
+    @abstractmethod
+    def get_test_generator(self) -> TestCaseGenerator
+```
+
+### TestCaseGenerator (Clase Abstracta)
+
+```python
+class TestCaseGenerator(ABC):
+    @abstractmethod
+    def get_fixed_cases(self) -> List[Tuple[Any, ...]]
+
+    @abstractmethod
+    def generate_random_cases(self, n: int, seed: Optional[int] = None) -> List[Tuple[Any, ...]]
+
+    def generate_all_cases(self, num_random: int, seed: Optional[int] = None) -> List[Tuple[Any, ...]]
+```
+
+## Solución de Problemas
+
+### Error: ConfigurationError - "No se han agregado ejercicios"
+
+```python
+# Asegúrate de agregar al menos un ejercicio
+tester.add_exercise(MiEjercicio())
+```
+
+### Error: ValidationError - "Ejercicio duplicado"
+
+```python
+# No agregues el mismo ejercicio dos veces
+# (se compara por name y file_suffix)
+```
+
+### Error: EvaluationError - "No se encontró la función"
+
+```python
+# Verifica que el archivo del estudiante defina la función correcta
+# Ejemplo: para function_name="suma", el archivo debe tener:
 def suma(a, b):
     return a + b
 ```
 
-## Reportes Generados
+### Error: "Archivo no encontrado"
 
-### JSON (`resultados_TIMESTAMP.json`)
-Datos estructurados con:
-- Resultados por estudiante
-- Casos pasados/fallidos/error
-- Detalles de cada fallo (entrada, esperado, obtenido)
+```python
+# Verifica que los archivos usen guiones bajos:
+# Correcto:   Adriana_Amador_1.py
+# Incorrecto: Adriana Amador 1.py
+```
 
-### Markdown (`reporte_TIMESTAMP.md`)
-Reporte legible con:
-- Resumen general de aprobacion por ejercicio
-- Tabla detallada por estudiante
-- Estadisticas de casos fijos pasados
+### Resultados inesperados tras modificar la solución
 
-## Consejos
+```python
+# Regenera los casos de prueba
+tester.generate_test_cases(num_random=100, seed=42)
+```
 
-1. **Casos fijos**: Son casos criticos que deben ir al inicio de la lista en los generadores. Permiten verificar edge cases importantes.
+## Migración desde v1.0
 
-2. **Nombres de ejercicios**: Deben ser identificadores Python validos (sin espacios, caracteres especiales).
+Si tienes código usando la v1.0 (con `config.py` y estructura de diccionarios):
 
-3. **Formato de nombres**: Las carpetas de estudiantes pueden tener espacios, pero los archivos deben usar guiones bajos. El framework maneja esto automáticamente.
+**Antes (v1.0)**:
+```python
+EXAM_CONFIG = {
+    "exam_name": "Mi Examen",
+    "exercises": [{"name": "suma", "function_name": "suma", ...}]
+}
+```
 
-4. **Regenerar casos**: Si modificas la solución correcta o los generadores, debes ejecutar nuevamente `python Tester/generate_test_cases.py` para regenerar las respuestas esperadas.
+**Después (v2.0)**:
+```python
+class SumaExercise(Exercise):
+    def __init__(self):
+        super().__init__(name="suma", function_name="suma", file_suffix=1)
+    # ... implementar métodos abstractos
 
-5. **Timeout**: Las evaluaciones tienen timeout de 60 segundos por estudiante. Codigo con loops infinitos sera detectado.
+tester = ExamTester("Mi Examen").add_exercise(SumaExercise())
+```
 
-6. **Limpieza automatica**: El tester inyecta archivos temporales pero los limpia al terminar. Las carpetas de estudiantes quedan intactas.
+## Contribuir
 
-7. **Reutilizacion**: Para un nuevo examen, solo cambia `config.py`, `ExamContent/correctSolution.py` y `ExamContent/input.py`. El framework en `Tester/` y `Main/` nunca se modifica.
-
-8. **Eficiencia**: Con respuestas pre-generadas, evaluar 100 estudiantes con 100 casos cada uno solo requiere ejecutar la solución correcta 100 veces (una vez por caso), en lugar de 10,000 veces (100 casos × 100 estudiantes).
-
-## Solucion de Problemas
-
-### Error: "No se encontro generar_casos_{nombre}"
-
-- Verifica que `ExamContent/input.py` tenga una funcion con ese nombre exacto
-
-### Error: "No se encontro funcion '{nombre}' en ExamContent/correctSolution.py"
-
-- Verifica que `ExamContent/correctSolution.py` defina la funcion especificada
-- Ejecuta nuevamente `python Tester/generate_test_cases.py` para regenerar el JSON
-
-### Error: "No se encontro ExamContent/test_cases.json"
-
-- Ejecuta primero: `python Tester/generate_test_cases.py`
-
-### Error: "Archivo {nombre}_{suffix}.py no encontrado"
-
-- Verifica que los archivos de estudiante usen guiones bajos (`_`), no espacios
-- Ejemplo correcto: `Adriana_Amador_1.py` (no `Adriana Amador 1.py`)
-- La carpeta puede llamarse `Adriana Amador` (con espacio), pero el archivo debe usar guiones bajos
-
-### Estudiante con todos los casos fallidos
-
-- Verifica que el nombre de la funcion en su archivo coincida exactamente con `function_name` en config.py
-- Verifica que la firma de la funcion (numero de parametros) coincida con la solucion oficial
-
-### Resultados diferentes después de modificar la solución correcta
-
-- Recuerda regenerar los casos: `python Tester/generate_test_cases.py`
-- Las respuestas esperadas están pre-generadas en `test_cases.json`, no se actualizan automáticamente
+Reporta problemas o sugiere mejoras en el repositorio del proyecto.
 
 ## Licencia
 
-Framework desarrollado para evaluacion educativa.
+MIT License - Ver [LICENSE](LICENSE) para detalles.
+
+## Autor
+
+ExamTester Contributors
+
+---
+
+**Versión**: 2.0.0
+**Última actualización**: 2026-01-29
