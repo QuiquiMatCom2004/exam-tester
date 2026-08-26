@@ -88,7 +88,7 @@ setup(
     packages=find_packages(exclude=["examples", "tests", "StudentsCode", "Results"]),
 
     # Python version requirement
-    python_requires=">=3.7",
+    python_requires=">=3.9",
 
     # Dependencies (none required for base package)
     install_requires=[
@@ -114,8 +114,6 @@ setup(
         "Topic :: Software Development :: Testing",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
