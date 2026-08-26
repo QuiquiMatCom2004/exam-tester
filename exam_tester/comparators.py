@@ -8,6 +8,7 @@ Comparadores disponibles:
 - default: Igualdad directa (==)
 - list_equal: Compara listas elemento a elemento
 - tuple_result: Para funciones que retornan (bool, valor)
+- json_equal: Compara estructuras JSON (dicts/listas) con tolerancia para floats
 
 Example:
     Usar comparador personalizado en un ejercicio:
@@ -153,7 +154,62 @@ def tuple_result(esperado: Any, obtenido: Any) -> bool:
         return True
 
     # De lo contrario, comparar elemento a elemento
+    if len(esperado) != len(obtenido):
+        return False
     return all(e == o for e, o in zip(esperado, obtenido))
+
+
+def json_equal(esperado: Any, obtenido: Any, epsilon: float = 1e-6) -> bool:
+    """
+    Compara estructuras JSON (dicts, listas, valores) recursivamente.
+
+    Maneja correctamente:
+    - Dicts: compara que tengan las mismas claves y valores equivalentes
+    - Listas: compara elemento a elemento en orden
+    - Floats: usa tolerancia epsilon para evitar errores de precisión
+    - int vs float: 1 y 1.0 se consideran iguales
+    - Otros tipos: comparación directa con ==
+
+    Args:
+        esperado: Estructura JSON esperada
+        obtenido: Estructura JSON obtenida del estudiante
+        epsilon: Tolerancia para comparación de floats (default: 1e-6)
+
+    Returns:
+        True si son equivalentes, False en caso contrario
+
+    Example:
+        >>> json_equal({"a": 1.0}, {"a": 1.0})
+        True
+        >>> json_equal({"a": 1.0000001}, {"a": 1.0})
+        True
+        >>> json_equal([{"x": 1}, {"x": 2}], [{"x": 1}, {"x": 2}])
+        True
+        >>> json_equal({"a": 1}, {"a": 2})
+        False
+        >>> json_equal([1, 2], [1, 2, 3])
+        False
+    """
+    if isinstance(esperado, dict) and isinstance(obtenido, dict):
+        if set(esperado.keys()) != set(obtenido.keys()):
+            return False
+        return all(
+            json_equal(esperado[k], obtenido[k], epsilon)
+            for k in esperado
+        )
+
+    if isinstance(esperado, list) and isinstance(obtenido, list):
+        if len(esperado) != len(obtenido):
+            return False
+        return all(
+            json_equal(e, o, epsilon)
+            for e, o in zip(esperado, obtenido)
+        )
+
+    if isinstance(esperado, (int, float)) and isinstance(obtenido, (int, float)):
+        return abs(float(esperado) - float(obtenido)) < epsilon
+
+    return esperado == obtenido
 
 
 # ================================================================
@@ -164,6 +220,7 @@ COMPARATORS: dict[str, Callable[[Any, Any], bool]] = {
     "default": default_equal,
     "list_equal": list_equal,
     "tuple_result": tuple_result,
+    "json_equal": json_equal,
 }
 """
 Registro global de comparadores disponibles.

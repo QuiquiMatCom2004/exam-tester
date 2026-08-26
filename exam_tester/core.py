@@ -24,6 +24,7 @@ Example:
     ... )
 """
 
+import copy
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -255,7 +256,8 @@ class ExamTester:
             # Ejecutar solución correcta para cada caso
             cases_with_outputs = []
             for caso in input_cases:
-                output, error = self._execute_solution(solution_func, caso)
+                caso_copia = copy.deepcopy(caso)
+                output, error = self._execute_solution(solution_func, caso_copia)
                 cases_with_outputs.append({
                     "inputs": list(caso),
                     "expected_output": output,
