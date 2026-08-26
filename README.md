@@ -17,11 +17,14 @@ Framework genérico y reutilizable orientado a objetos para evaluar automáticam
 ## Instalación
 
 ```bash
+# Desde el repositorio de GitHub (no requiere clonar)
+pip install git+https://github.com/QuiquiMatCom2004/exam-tester.git
+
+# Desde una copia local del repositorio
+pip install .
+
 # Instalación en modo desarrollo (editable)
 pip install -e .
-
-# Instalación regular
-pip install .
 ```
 
 ## Inicio Rápido
@@ -220,7 +223,7 @@ def mi_generador_personalizado(n, seed=None):
 
 generator = CustomGenerator(
     fixed_cases=[(10, 'a'), (20, 'b')],
-    random_generator=mi_generador_personalizado
+    random_func=mi_generador_personalizado
 )
 ```
 
@@ -288,13 +291,23 @@ def suma(a, b):
 ```python
 # Evaluar todos los estudiantes
 tester.evaluate_all()
+```
 
-# Acceder a resultados programáticamente
-results = tester.get_results()
-for student_result in results:
-    print(f"Estudiante: {student_result['nombre_estudiante']}")
-    for ejercicio in student_result['ejercicios']:
-        print(f"  {ejercicio['ejercicio']}: {ejercicio['pasados']}/{ejercicio['total']}")
+La API pública no expone los resultados en memoria; para inspeccionarlos, genera los reportes (siguiente paso) y lee el JSON producido:
+
+```python
+import json
+
+with open("./Results/resultados_TIMESTAMP.json", encoding="utf-8") as f:
+    data = json.load(f)
+
+for resultado in data["resultados"]:
+    print(f"Estudiante: {resultado['nombre_estudiante']}")
+    for ejercicio in resultado.get("ejercicios", []):
+        if "error" in ejercicio:
+            print(f"  {ejercicio.get('nombre_funcion', '?')}: ERROR - {ejercicio['error']}")
+        else:
+            print(f"  {ejercicio['nombre_funcion']}: {ejercicio['casos_pasados']}/{ejercicio['total_casos']}")
 ```
 
 ### Paso 7: Generar Reportes
@@ -318,6 +331,7 @@ from exam_tester.comparators import COMPARATORS
 # default: Igualdad directa (==)
 # list_equal: Compara listas elemento a elemento
 # tuple_result: Para funciones que retornan (bool, valor)
+# json_equal: Compara dicts/listas recursivamente, con tolerancia para floats
 ```
 
 ### Crear Comparador Personalizado
@@ -453,7 +467,6 @@ class ExamTester:
     def save_test_cases(self, filepath: str) -> None
     def evaluate_all(self) -> 'ExamTester'
     def generate_reports(self, formats: List[str] = ['json', 'markdown']) -> 'ExamTester'
-    def get_results(self) -> List[Dict[str, Any]]
 ```
 
 ### Exercise (Clase Abstracta)
