@@ -82,7 +82,7 @@ setup(
     description="A generic OOP framework for automatically evaluating student code through test cases",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/exam-tester",  # Update with actual URL
+    url="https://github.com/QuiquiMatCom2004/exam-tester",
 
     # Package discovery
     packages=find_packages(exclude=["examples", "tests", "StudentsCode", "Results"]),
@@ -151,9 +151,9 @@ setup(
 
     # Project URLs
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/exam-tester/issues",
-        "Source": "https://github.com/yourusername/exam-tester",
-        "Documentation": "https://github.com/yourusername/exam-tester/blob/main/README.md",
+        "Bug Reports": "https://github.com/QuiquiMatCom2004/exam-tester/issues",
+        "Source": "https://github.com/QuiquiMatCom2004/exam-tester",
+        "Documentation": "https://github.com/QuiquiMatCom2004/exam-tester/blob/main/README.md",
     },
 
     # License
