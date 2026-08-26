@@ -14,7 +14,9 @@ Example:
     >>> result = evaluator.evaluate_student("Juan Perez", Path("./StudentsCode/Juan Perez"))
 """
 
+import copy
 import importlib.util
+import multiprocessing
 import sys
 from pathlib import Path
 from typing import Dict, List, Any, Callable, Tuple, Optional
@@ -22,6 +24,72 @@ from typing import Dict, List, Any, Callable, Tuple, Optional
 from .exercise import Exercise
 from .comparators import get_comparator
 from .exceptions import EvaluationError
+
+
+def _student_worker(file_path_str: str, function_name: str,
+                     args: Tuple, queue: "multiprocessing.Queue") -> None:
+    """
+    Carga el archivo del estudiante desde cero y llama a la función indicada.
+
+    Se ejecuta dentro de un proceso hijo aislado (ver _execute_function),
+    para que cualquier estado global que el estudiante modifique (límite de
+    recursión, semilla de random, monkeypatching, variables de módulo,
+    argumentos por defecto mutables) muera junto con el proceso y nunca
+    contamine al intérprete padre, a otros casos, otros ejercicios u otros
+    estudiantes.
+    """
+    file_path = Path(file_path_str)
+    module_name = f"student_{file_path.stem}_{id(file_path)}"
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if spec is None or spec.loader is None:
+            queue.put(("error", "No se pudo cargar el módulo"))
+            return
+
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        if not hasattr(module, function_name):
+            queue.put(("error", f"Función {function_name} no encontrada"))
+            return
+
+        resultado = getattr(module, function_name)(*args)
+        try:
+            queue.put(("ok", resultado))
+        except Exception:
+            queue.put(("error", "El resultado no se pudo serializar entre procesos"))
+    except Exception as e:
+        queue.put(("error", f"{type(e).__name__}: {str(e)}"))
+
+
+def _student_check_worker(file_path_str: str, function_name: str,
+                           queue: "multiprocessing.Queue") -> None:
+    """
+    Verifica en un proceso aislado si el módulo del estudiante carga y si
+    contiene la función esperada, SIN llamarla. Existe para poder dar
+    mensajes de error tempranos y amigables (archivo/función faltante) sin
+    ejecutar el código de importación del estudiante en el proceso padre.
+    """
+    file_path = Path(file_path_str)
+    module_name = f"student_check_{file_path.stem}_{id(file_path)}"
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if spec is None or spec.loader is None:
+            queue.put(("load_error", "No se pudo cargar el módulo"))
+            return
+
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        if not hasattr(module, function_name):
+            queue.put(("missing_function", None))
+            return
+
+        queue.put(("ok", None))
+    except Exception as e:
+        queue.put(("load_error", f"{type(e).__name__}: {str(e)}"))
 
 
 class StudentEvaluator:
@@ -124,23 +192,14 @@ class StudentEvaluator:
                 'error': f'Archivo {file_path.name} no encontrado'
             }
 
-        # Cargar módulo
-        module = self._load_module(file_path)
-        if module is None:
+        # Verificar que el módulo carga y tiene la función, en un proceso
+        # aislado (evita ejecutar el import del estudiante en el padre)
+        ok, error_msg = self._check_module(file_path, exercise.function_name)
+        if not ok:
             return {
                 'nombre_funcion': exercise.function_name,
-                'error': 'No se pudo cargar el módulo'
+                'error': error_msg
             }
-
-        # Verificar que tiene la función
-        if not hasattr(module, exercise.function_name):
-            return {
-                'nombre_funcion': exercise.function_name,
-                'error': f'Función {exercise.function_name} no encontrada'
-            }
-
-        # Obtener función del estudiante
-        student_func = getattr(module, exercise.function_name)
 
         # Obtener casos de prueba
         casos = self.test_cases.get(exercise.name, [])
@@ -153,28 +212,33 @@ class StudentEvaluator:
         # Obtener comparador
         comparator = get_comparator(exercise.comparator)
 
-        # Ejecutar pruebas
+        # Ejecutar pruebas (cada caso corre en un proceso aislado, ver _execute_function)
         num_fixed = exercise.get_test_generator().get_num_fixed_cases()
         return self._run_tests(
-            student_func,
-            casos,
+            file_path,
             exercise.function_name,
+            casos,
             num_fixed,
             comparator
         )
 
-    def _run_tests(self, student_func: Callable,
-                   test_cases: List[Dict[str, Any]],
+    def _run_tests(self, file_path: Path,
                    func_name: str,
+                   test_cases: List[Dict[str, Any]],
                    num_fixed_cases: int,
                    comparator: Callable[[Any, Any], bool]) -> Dict[str, Any]:
         """
         Ejecuta todos los casos de prueba para una función.
 
+        Cada caso se ejecuta en un proceso hijo aislado y desechable (ver
+        _execute_function), recargando el archivo del estudiante desde cero
+        en cada llamada. Esto evita que el estado de un caso (o de un
+        ejercicio, o de un estudiante) se filtre al siguiente.
+
         Args:
-            student_func: Función del estudiante
-            test_cases: Casos de prueba con respuestas esperadas
+            file_path: Ruta al archivo .py del estudiante
             func_name: Nombre de la función
+            test_cases: Casos de prueba con respuestas esperadas
             num_fixed_cases: Número de casos fijos
             comparator: Función comparadora
 
@@ -193,14 +257,14 @@ class StudentEvaluator:
         }
 
         for i, caso in enumerate(test_cases, 1):
-            # Obtener datos del caso
-            inputs = tuple(caso['inputs'])
+            # Obtener datos del caso (deep copy para que cada estudiante use el tablero original)
+            inputs = copy.deepcopy(tuple(caso['inputs']))
             expected_output = caso['expected_output']
             expected_error = caso.get('expected_error')
 
-            # Ejecutar función del estudiante
+            # Ejecutar función del estudiante en un proceso aislado
             student_output, student_error = self._execute_function(
-                student_func, inputs
+                file_path, func_name, inputs
             )
 
             # Determinar si es caso fijo
@@ -283,50 +347,104 @@ class StudentEvaluator:
                 resultados['casos_fijados_pasados'] += 1
 
     @staticmethod
-    def _load_module(file_path: Path):
+    def _check_module(file_path: Path, function_name: str,
+                       timeout: int = 5) -> Tuple[bool, Optional[str]]:
         """
-        Carga un módulo Python desde un archivo.
+        Verifica, en un proceso hijo aislado, si el archivo del estudiante
+        carga correctamente y si contiene la función esperada.
+
+        No ejecuta la función, solo el import. Correrlo en un proceso
+        aparte (en vez de importar directamente en el padre) evita que
+        efectos secundarios del import (globals, monkeypatching, límites de
+        recursión, bucles infinitos a nivel de módulo) afecten al proceso
+        principal del framework.
 
         Args:
-            file_path: Ruta al archivo .py
+            file_path: Ruta al archivo .py del estudiante
+            function_name: Nombre de la función esperada
+            timeout: Tiempo máximo en segundos (default: 5)
 
         Returns:
-            Módulo cargado o None si hay error
+            Tupla (ok, mensaje_error). mensaje_error es None si ok es True.
         """
-        try:
-            spec = importlib.util.spec_from_file_location(
-                "student_module",
-                file_path
-            )
-            if spec is None or spec.loader is None:
-                return None
+        ctx = multiprocessing.get_context("fork")
+        queue = ctx.Queue()
+        process = ctx.Process(
+            target=_student_check_worker,
+            args=(str(file_path), function_name, queue),
+            daemon=True,
+        )
+        process.start()
+        process.join(timeout)
 
-            module = importlib.util.module_from_spec(spec)
-            sys.modules['student_module'] = module
-            spec.loader.exec_module(module)
-            return module
-        except Exception:
-            return None
+        if process.is_alive():
+            process.terminate()
+            process.join(1)
+            if process.is_alive():
+                process.kill()
+                process.join()
+            return False, f"TimeoutError: La carga del módulo excedió el tiempo límite ({timeout}s)"
+
+        if queue.empty():
+            return False, "No se pudo cargar el módulo"
+
+        status, _ = queue.get()
+        if status == "ok":
+            return True, None
+        if status == "missing_function":
+            return False, f"Función {function_name} no encontrada"
+        return False, "No se pudo cargar el módulo"
 
     @staticmethod
-    def _execute_function(func: Callable, args: Tuple,
+    def _execute_function(file_path: Path, function_name: str, args: Tuple,
                          timeout: int = 5) -> Tuple[Any, Optional[str]]:
         """
-        Ejecuta una función con manejo de excepciones.
+        Ejecuta la función del estudiante en un proceso hijo aislado.
+
+        A diferencia de un hilo, un proceso puede matarse de verdad
+        (terminate/kill) si excede el tiempo límite: si el estudiante tiene
+        un bucle infinito o una recursión que nunca termina, el proceso se
+        destruye y la evaluación continúa en vez de quedarse colgada. Además,
+        el proceso hijo importa el archivo del estudiante desde cero, así que
+        cualquier efecto secundario global (límite de recursión, semillas,
+        monkeypatching, variables de módulo, argumentos por defecto mutables)
+        desaparece junto con el proceso y no puede filtrarse a otros casos,
+        ejercicios o estudiantes.
 
         Args:
-            func: Función a ejecutar
+            file_path: Ruta al archivo .py del estudiante
+            function_name: Nombre de la función a llamar
             args: Argumentos
-            timeout: Tiempo máximo (reservado para futura implementación)
+            timeout: Tiempo máximo en segundos (default: 5)
 
         Returns:
             Tupla (resultado, error_msg)
         """
-        try:
-            resultado = func(*args)
-            return resultado, None
-        except Exception as e:
-            return None, f"{type(e).__name__}: {str(e)}"
+        ctx = multiprocessing.get_context("fork")
+        queue = ctx.Queue()
+        process = ctx.Process(
+            target=_student_worker,
+            args=(str(file_path), function_name, args, queue),
+            daemon=True,
+        )
+        process.start()
+        process.join(timeout)
+
+        if process.is_alive():
+            process.terminate()
+            process.join(1)
+            if process.is_alive():
+                process.kill()
+                process.join()
+            return None, f"TimeoutError: La función excedió el tiempo límite ({timeout}s)"
+
+        if queue.empty():
+            if process.exitcode not in (0, None):
+                return None, f"CrashError: el proceso terminó abruptamente (código {process.exitcode})"
+            return None, "EvaluationError: no se recibió resultado del proceso hijo"
+
+        status, payload = queue.get()
+        return (payload, None) if status == "ok" else (None, payload)
 
     @staticmethod
     def _format_value(value: Any) -> Any:
