@@ -12,6 +12,11 @@ __pycache__/
 *.so
 .Python
 
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
 # IDEs
 .vscode/
 .idea/
@@ -25,3 +30,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Codegraph
+.codegraph/
